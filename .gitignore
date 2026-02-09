@@ -1,0 +1,45 @@
+# === Python-related ===
+__pycache__/
+*.py[cod]
+*.so
+*.pyd
+*.pyo
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Conda/venv
+env/
+.venv/
+*.egg-info/
+*.egg
+
+# Logs and temp files
+*.log
+*.out
+*.tmp
+*.swp
+*.bak
+
+# VS Code
+.vscode/
+
+# Data, Outputs, and SOTA directories
+data/
+outputs/
+sota_repos/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Compiled notebooks (optional)
+*.nbconvert.ipynb
+
+
+# Git files to keep untracked
+secret_config.yaml
+credentials.json
+
+# Temporary files
+notebooks/inspections.ipynb
