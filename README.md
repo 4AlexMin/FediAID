@@ -189,5 +189,3 @@ To avoid accidental mismatches between checkpoints, memory banks and evaluation 
 
 Replace slashes in `backbone` (e.g. `microsoft/deberta-v3-base`) with underscores when used in filenames (scripts do this automatically). Filenames use underscores as separators . Each saved checkpoint also contains embedded metadata (encoder/backbone, dataset_id, k, best_f1, created_at).
 
-Use the provided wrapper scripts in `shells/` to create and consume artifacts following this convention. They will fail early if they cannot find matching files or detect metadata mismatches.
-
