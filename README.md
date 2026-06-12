@@ -1,4 +1,4 @@
-# DOSN-AIGT Detector
+# FediAID Deepfake-Text Detector
 
 This repository provides an experimental implementation of a **community‑augmented detector** for **AI‑generated text (AIGT)**, namely **FediAID**.  The goal of this project is to explore whether incorporating *community‑level information* can improve the detection of AI‑generated posts and enable cross‑platform transferability.
 
