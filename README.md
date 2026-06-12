@@ -7,7 +7,7 @@ This repository provides an experimental implementation of a **community‑augme
 The research behind this repository hypothesises that communities (such as federated instances on Mastodon) develop distinct linguistic norms and adopt AI tools at different rates.  By representing these communities as dense embeddings and *retrieving* similar communities at inference time, we can provide the detector with valuable domain context while keeping the core model portable.  The key ideas are:
 
 1. **Dataset** – A corpus of posts labelled as human‑written (HWT) or AI‑generated (AIGT), enriched with community identifiers.  Community labels are used as metadata rather than hard‑coded features.
-2. **Detector (FediAID)** – A **Community Similarity Attention (CSA)** model that fine‑tunes a pretrained encoder (e.g. RoBERTa or DeBERTa) for text classification and augments the resulting post representations with retrieved community embeddings.  Community representations are stored in an external memory bank and are not updated during training, preserving transferability.
+2. **Detector (FediAID)** – A **Community Similarity Attention (CSA)** model that fine‑tunes a pretrained encoder for text classification and augments the resulting post representations with retrieved community embeddings.  Community representations are stored in an external memory bank and are not updated during training, preserving transferability.
 3. **Analysis** – After training the detector, one can quantify the prevalence of AIGT across communities and even inspect ego‑networks (social graphs) to understand how many bots or AI‑assisted users surround a typical user.  Note: ego‑network analysis is outside the scope of this codebase and should be done separately.
 
 ## Repository Structure
