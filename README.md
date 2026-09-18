@@ -1,191 +1,325 @@
-# FediAID Deepfake-Text Detector
+# FediAID: Deepfake-Text Detection
 
-This repository provides an experimental implementation of a **community‑augmented detector** for **AI‑generated text (AIGT)**, namely **FediAID**.  The goal of this project is to explore whether incorporating *community‑level information* can improve the detection of AI‑generated posts and enable cross‑platform transferability.
+FediAID is a community-augmented detector for AI-generated text (AIGT). It
+combines frozen DeBERTa-v3-base post embeddings with retrieved Fediverse
+community representations through Community Similarity Attention (CSA) module.
 
-## Overview
+## Repository structure
 
-The research behind this repository hypothesises that communities (such as federated instances on Mastodon) develop distinct linguistic norms and adopt AI tools at different rates.  By representing these communities as dense embeddings and *retrieving* similar communities at inference time, we can provide the detector with valuable domain context while keeping the core model portable.  The key ideas are:
-
-1. **Dataset** – A corpus of posts labelled as human‑written (HWT) or AI‑generated (AIGT), enriched with community identifiers.  Community labels are used as metadata rather than hard‑coded features.
-2. **Detector (FediAID)** – A **Community Similarity Attention (CSA)** model that fine‑tunes a pretrained encoder for text classification and augments the resulting post representations with retrieved community embeddings.  Community representations are stored in an external memory bank and are not updated during training, preserving transferability.
-3. **Analysis** – After training the detector, one can quantify the prevalence of AIGT across communities and even inspect ego‑networks (social graphs) to understand how many bots or AI‑assisted users surround a typical user.  Note: ego‑network analysis is outside the scope of this codebase and should be done separately.
-
-## Repository Structure
-
+```text
+.
+├── checkpoints/
+│   ├── model_k27.pt
+│   └── memory_bank_complete_emb.npz
+├── expected/
+│   └── opensrc_metrics.csv
+├── scripts/
+│   ├── prepare_opensrc_datasets.py
+│   └── run_opensrc_reproduction.py
+├── src/
+│   ├── dataset.py
+│   ├── eval_opensrc.py
+│   ├── encode_posts.py
+│   ├── memory.py
+│   ├── model/csa.py
+│   └── train.py
+├── environment.yml
+├── requirements-data.txt
+├── requirements-reproduce.txt
+└── requirements.txt
 ```
-/
-├── README.md           # This readme
-├── requirements.txt    # Python dependencies
-├── src/                # Python source code
-│   ├── __init__.py     # Makes src a package
-│   ├── dataset.py      # Dataset and memory bank utilities
-│   ├── memory.py       # Functions to build community embeddings
-│   ├── model/          # Model components
-│   │   ├── __init__.py # Makes model a package
-│   │   └── csa.py      # Community Similarity Attention modules
-│   └── train.py        # Training script
-└── .gitignore          # Standard Git ignore patterns
-```
 
-## Getting Started
+The repository includes source code, a released checkpoint, and a community
+memory bank. The checkpoint-specific settings are described under
+`Evaluate with released checkpoint`.
 
-1. **Install dependencies** (ideally in a virtual environment):
+## Getting started
 
-   ```bash
-   pip install -r requirements.txt
-   ```
+### Install dependencies
 
-2. **Prepare your data.**  You need two JSONL files: a training set and a validation set.  Each line should be a JSON object with the following fields:
-
-   - `post_id`: a unique identifier for the post
-   - `text`: the raw post text (optional if you precompute embeddings)
-   - `label`: `0` for human‑written or `1` for AI‑generated
-   - `community_id`: identifier for the community/instance the post belongs to
-   - `post_emb`: a vector of floats representing the post text in embedding space (optional if you precompute embeddings; if omitted, the script will compute embeddings on the fly)
-
-3. **Build a community memory bank** using the training data:
-
-   ```bash
-   python -m src.memory \
-      --mode build \
-      --data /your_data_repo/train.jsonl \
-      --model microsoft/deberta-v3-base \
-      --out outputs/memory_bank.npz \
-      > logs/memory.log 2>&1
-   ```
-
-   This will compute a centroid vector for each community by averaging the pretrained encoder's embeddings of the posts belonging to that community.  The centroids are L2‑normalised and stored in a `.npz` file.
-
-4. **Train the CSA detector** on your labelled data:
-
-   ```bash
-   python -m src.train \
-       --train /your_data_repo/train.jsonl \
-       --val /your_data_repo/validation.jsonl \
-       --memory outputs/memory_bank.npz \
-       --encoder microsoft/deberta-v3-base \
-       --epochs 5 \
-       --k 5 \
-       --out outputs/model.pt \
-       > logs/train.log 2>&1
-   ```
-
-   During training the model fine‑tunes the encoder and classifier while retrieving the top‐`k` nearest community centroids for each post.  At inference time the same memory bank is used to augment post embeddings.
-
-5. **Evaluate** the trained model on held‑out communities or new platforms by constructing an appropriate memory bank and running inference.  The `src/train.py` script includes an inference mode for this purpose.
-
-
-
-## Runtime notes: GPU reservation and HuggingFace mirrors
-
-For reproducible GPU usage across shared machines we prefer manual GPU reservation at the shell level. Example:
+For training and general use:
 
 ```bash
-# Reserve host GPU index 3 and run the training script. Inside the process,
-# that GPU will be visible as `cuda:0`.
-CUDA_VISIBLE_DEVICES=3 python -m src.train --train train.jsonl --val val.jsonl --memory memory_bank.npz --encoder roberta-base
+python -m pip install -r requirements.txt
 ```
 
-The repository includes a small helper `src.config.get_default_device()` which follows the simple rule used in this project:
-
-```python
-device = "cuda:0" if torch.cuda.is_available() else "cpu"
-```
-
-If you prefer to use a mirror for HuggingFace model downloads (for example if you are on a restricted network), set the `HF_ENDPOINT` environment variable before running or set `GAI_HF_MIRROR` and the scripts will apply it automatically:
+For evaluation with precomputed embeddings:
 
 ```bash
-export HF_ENDPOINT=https://hf-mirror.com # also the default mirror when no environment variables are set.
-# or
-export GAI_HF_MIRROR=https://hf-mirror.com
-
-CUDA_VISIBLE_DEVICES=3 python -m src.train --train train.jsonl --val val.jsonl --memory memory_bank.npz --encoder roberta-base
+python -m pip install -r requirements-reproduce.txt
 ```
 
-The codebase prefers the explicit, manual GPU reservation workflow to avoid automatically reassigning GPUs that other users may be using.
+A CUDA-capable GPU is recommended for large datasets. CPU execution is
+supported with a smaller batch size.
 
-## Ablation experiments
+### Prepare your data.
 
-This repository includes utilities and example workflows to run ablation experiments that compare the full CSA model against a baseline that uses only the pretrained encoder (no community retrieval / no fine-tuning of the encoder).
+FediAID consumes JSONL records with the following fields:
 
-Files and scripts added for ablation experiments:
+| Field | Required | Description |
+|---|---:|---|
+| `text` | yes | Post text. |
+| `post_emb` | optional | A vector of floats representing the post text in embedding space. If omitted, the script computes embeddings on the fly. |
+| `label` | yes | `0` for human-written text and `1` for AI-generated text. |
+| `community_id` | required for community-aware training/evaluation | Community or instance identifier. |
 
-- `src/train_baseline.py`: trains a baseline classifier that uses only the post embedding. The script uses `AIGTDataset` to compute or load embeddings and trains a small MLP (the encoder is not updated by the baseline training loop by default).
-- `src/eval_ablation.py`: evaluates a CSA checkpoint and/or a baseline checkpoint on a validation set and prints loss, F1 and AUROC for easy comparison.
-- `examples/run_ablation.sh`: example shell workflow that (1) trains the CSA model, (2) trains the baseline with a frozen encoder, and (3) evaluates both models.
+For training and memory-bank construction, use records containing `text`,
+`label`, and `community_id`. To create post embeddings from raw JSONL data:
 
-Ablation workflow
+```bash
+python -m src.encode_posts \
+  --in /path/to/posts.jsonl \
+  --out /path/to/posts_emb.jsonl \
+  --encoder microsoft/deberta-v3-base \
+  --batch_size 256 \
+  --device cuda:0
+```
 
-1. Train the full CSA model AS ABOVE.
+*The `--encoder` value is an example backbone and can be replaced with another compatible Hugging Face encoder. The training data, embeddings, and memory
+bank must use compatible representations.*
 
-2. Train the baseline classifier that uses the pretrained encoder but does not fine-tune it:
+### Build a community memory bank
 
-   ```bash
-   python -m src.train_baseline \
-    --train /your_data_repo/train.jsonl \
-    --val /your_data_repo/validation.jsonl \
-    --memory outputs/memory_bank.npz \
-    --encoder microsoft/deberta-v3-base \
-    --epochs 5 \
-    --out outputs/baseline.pt \
-    --freeze_encoder \
-    > logs/train_baseline.log 2>&1
-   ```
+Build a normalized centroid for each community from the training data:
 
-3. Evaluate both checkpoints on the validation set:
-   ```bash
-   python -m src.eval_ablation \
-    --val /your_data_repo/validation.jsonl \
-    --memory outputs/memory_bank.npz \
-    --csacheck outputs/model.pt \
-    --baselinecheck outputs/baseline.pt\
-    --encoder microsoft/deberta-v3-base \
-    > logs/eval_ablation.log 2>&1
-   ```
+```bash
+python -m src.memory \
+  --mode build \
+  --data /path/to/train_emb.jsonl \
+  --model microsoft/deberta-v3-base \
+  --out outputs/memory_bank.npz
+```
 
-Notes
-- The baseline classifier uses an MLP of comparable capacity to the CSA classifier (for fair comparison) but omits the community-attention branch.
-- If your dataset already contains `post_emb` fields (precomputed embeddings), training and evaluation will be faster because embedding computation is skipped. If not, the scripts will compute embeddings on the fly using the provided encoder name.
-- Scripts respect the manual GPU reservation approach: set `CUDA_VISIBLE_DEVICES` at the shell level to reserve a host GPU index for the run.
+### Train FediAID
+
+Train the model using the training and validation JSONL files:
+
+```bash
+python -m src.train \
+  --train /path/to/train_emb.jsonl \
+  --val /path/to/validation_emb.jsonl \
+  --memory outputs/memory_bank.npz \
+  --encoder microsoft/deberta-v3-base \
+  --epochs 10 \
+  --k 27 \
+  --lambda_mmr 0.45 \
+  --out outputs/model_k27.pt
+```
+
+### Evaluation
+
+Evaluate a trained FediAID checkpoint with an explicitly supplied memory bank:
+
+```bash
+python -m src.eval_opensrc \
+  --datasets /path/to/evaluation/*.jsonl \
+  --memory /path/to/memory_bank.npz \
+  --csacheck /path/to/model.pt \
+  --encoder /path/to/encoder \
+  --ks 1-30 \
+  --lambda_mmr 0.45 \
+  --batch_size 32 \
+  --device cuda:0 \
+  --out results/evaluation.xlsx
+```
+
+The evaluator writes performances for each input file. For
+CPU execution, use `--device cpu` and reduce `--batch_size`, for example `256`.
+
+#### Evaluate with released checkpoint
+
+The repository's released checkpoint expects 768-dimensional embeddings,
+retrieves `k=27` community centroids, and uses `lambda_mmr=0.45`:
+
+```bash
+python -m src.eval_opensrc \
+  --datasets /path/to/evaluation/*.jsonl \
+  --memory checkpoints/memory_bank_complete_emb.npz \
+  --csacheck checkpoints/model_k27.pt \
+  --encoder microsoft/deberta-v3-base \
+  --ks 27 \
+  --lambda_mmr 0.45 \
+  --batch_size 1024 \
+  --device cuda:0 \
+  --out results/evaluation.xlsx
+```
+
+## Runtime notes
+
+GPU selection is explicit. Reserve a host GPU at the shell level so the
+process sees it as `cuda:0`:
+
+```bash
+CUDA_VISIBLE_DEVICES=3 python -m src.eval_opensrc \
+  --datasets /path/to/evaluation/*.jsonl \
+  --memory /path/to/memory_bank.npz \
+  --csacheck /path/to/model.pt \
+  --ks 1-10 --lambda_mmr 0.45 --device cuda:0
+```
+
+If raw-text evaluation requires Hugging Face downloads, set `HF_ENDPOINT` or
+`GAI_HF_MIRROR` before running.
+
+# Reproduction
+
+## Scope of reproduction
+
+The manuscript-oriented reproduction target is the FediAID cross-platform
+open-source evaluation:
+
+- 12 external datasets: three AIGTBench datasets, five MultiSocial datasets,
+  and four source-variation datasets (`deepfake`, `fox8`, `m4`, and
+  `tweepfake`).
+- Five matched seeds: `0`, `1`, `2`, `3`, and `4`.
+- Released checkpoint: `checkpoints/model_k27.pt`.
+- Released memory bank: `checkpoints/memory_bank_complete_emb.npz`.
+- Retrieval: `k=27` and `lambda_mmr=0.45`.
+- Metrics: loss, accuracy, F1, and ROC-AUC for each dataset and seed.
 
 
-## Open-source evaluation
 
+The manuscript's eight-platform main results are expected to be approximately:
 
-- **Evaluate open-source datasets:** discovers `data/opensrc/*.jsonl`, evaluates a baseline checkpoint and CSA checkpoints (optionally across many `k` values), and writes results.
-   ```bash
-   python -u -m src.eval_opensrc \
-      --datasets "/your_data_repo/opensrc/*.jsonl" \
-      --memory outputs/memory_bank.npz \
+| Metric | Mean | Population standard deviation |
+|---|---:|---:|
+| F1 | 0.864 | 0.051 |
+| ROC-AUC | 0.856 | 0.075 |
+
+The four source-variation datasets are included in the 12-dataset workflow and
+in the per-dataset expected metrics.
+
+## External evaluation datasets
+
+The external datasets are intentionally not bundled with this repository.
+Both preparation routes below produce the same raw directories
+`opensrc_platforms_seed{0..4}/`, each containing the 12 JSONL files used by the
+reproduction runner. Follow all source licenses and citation requirements.
+
+### Directly Download from Zenodo
+
+The authors provide a prepared five-seed bundle through Zenodo:
+
+```text
+Zenodo DOI: 10.5281/zenodo.22828007
+```
+The Zenodo bundle contains these raw-data directories:
+
+```text
+opensrc_platforms_seed0/
+opensrc_platforms_seed1/
+opensrc_platforms_seed2/
+opensrc_platforms_seed3/
+opensrc_platforms_seed4/
+```
+
+Each directory contains the same 12 JSONL files:
+
+| Files | Original source |
+|---|---|
+| `AIGTB_medium.jsonl`, `AIGTB_quora.jsonl`, `AIGTB_reddit.jsonl` | [AIGTBench](https://huggingface.co/datasets/tarryzhang/AIGTBench) |
+| `multisocial_discord.jsonl`, `multisocial_gab.jsonl`, `multisocial_telegram.jsonl`, `multisocial_twitter.jsonl`, `multisocial_whatsapp.jsonl` | [MultiSocial](https://zenodo.org/records/13846152) |
+| `deepfake.jsonl`, `fox8.jsonl`, `m4.jsonl`, `tweepfake.jsonl` | Their respective original public dataset releases |
+
+The Zenodo bundle contains raw records with `text` and `label`.
+
+### Prepare datasets from public sources
+
+The preparation script creates the same five raw seed directories from the
+public source files. It expects the following source layout:
+
+```text
+/path/to/raw-sources/
+├── multisocial_anonymized.csv
+├── fox8_23_dataset.ndjson
+├── tweepfake_deepfake_text_detection/data/splits/
+│   ├── train.csv
+│   ├── validation.csv
+│   └── test.csv
+├── M4/*.jsonl
+└── synthetic-text-datasets/RedditBot.jsonl
+```
+
+AIGTBench is loaded directly from its Hugging Face dataset repository. Install
+the data-preparation dependencies, then run:
+
+```bash
+python -m pip install -r requirements-data.txt
+python scripts/prepare_opensrc_datasets.py \
+  --source-root /path/to/raw-sources \
+  --out-root /path/to/evaluation-data
+```
+
+This writes raw JSONL files under `opensrc_platforms_seed{0..4}/`.
+
+## Generate embedding inputs
+
+Generate `opensrc_platforms_seed{0..4}_emb/` from the corresponding raw
+directories with `src/encode_posts.py`:
+
+```bash
+for seed in 0 1 2 3 4; do
+  mkdir -p /path/to/evaluation-data/opensrc_platforms_seed${seed}_emb
+  for input in /path/to/evaluation-data/opensrc_platforms_seed${seed}/*.jsonl; do
+    name=$(basename "${input%.jsonl}")
+    python -m src.encode_posts \
+      --in "$input" \
+      --out "/path/to/evaluation-data/opensrc_platforms_seed${seed}_emb/${name}_emb.jsonl" \
       --encoder microsoft/deberta-v3-base \
-      --batch_size 32 \
-      --csacheck "outputs/models/model_k{k}.pt" \
-      --baselinecheck outputs/baseline.pt \
-      --ks 1-30 \
-      --out results/opensrc_eval.xlsx \
-      > logs/eval_opensrc.log 2>&1
-   ```
+      --batch_size 256 \
+      --device cuda:0
+  done
+done
+```
+*If this step is skipped, evaluation will still work and compute embeddings on the fly.*
 
-   Notes:
-   - `--csacheck` may contain a pattern with `{k}` (for per-k checkpoints) or point to one file reusedd for all ks.
-   - The script records `dataset, model (baseline|csa), k, loss, f1, auc, checkpoint`.
+## Reproduce the evaluation
 
+Using the prepared Zenodo bundle or locally generated embedding directories:
 
-## Naming convention
+```bash
+python scripts/run_opensrc_reproduction.py \
+  --data-root /path/to/evaluation-data \
+  --device cuda:0
+```
 
-To avoid accidental mismatches between checkpoints, memory banks and evaluation parameters this repository follows a simple, machine‑parsable filename convention used by the example wrappers in `shells/`:
+For CPU execution:
 
-- CSA model checkpoint:
+```bash
+python scripts/run_opensrc_reproduction.py \
+  --data-root /path/to/evaluation-data \
+  --device cpu \
+  --batch-size 256
+```
 
-   `model_{backbone}_{dataset_id}_k{K}.pt`
+The runner evaluates all 12 datasets for seeds 0 through 4, writes one result
+workbook per seed under `results/opensrc_reproduction/`, and writes
+`summary.csv`. It compares per-dataset mean F1 and ROC-AUC with
+`expected/opensrc_metrics.csv` using a default tolerance of 0.02.
 
-- Baseline checkpoint:
+For a partial smoke test, select one seed and skip the five-seed comparison:
 
-   `baseline_{backbone}_{dataset_id}.pt`
+```bash
+python scripts/run_opensrc_reproduction.py \
+  --data-root /path/to/evaluation-data \
+  --seeds 0 \
+  --no-check-expected \
+  --device cuda:0
+```
 
-- Memory bank:
+## Expected results
 
-   `memory_{backbone}_{dataset_id}.npz`
+The expected metrics file records the five-seed mean and standard deviation for
+each of the 12 datasets. The final aggregate supports the manuscript's
+cross-platform claims; exact floating-point values may vary slightly across
+hardware and software versions, which is why the comparison uses a tolerance.
 
-Replace slashes in `backbone` (e.g. `microsoft/deberta-v3-base`) with underscores when used in filenames (scripts do this automatically). Filenames use underscores as separators . Each saved checkpoint also contains embedded metadata (encoder/backbone, dataset_id, k, best_f1, created_at).
+## Code entry points
 
+- `src/eval_opensrc.py`: evaluates a FediAID checkpoint on explicit JSONL files.
+- `src/dataset.py`: loads post embeddings and retrieves community centroids.
+- `src/model/csa.py`: defines the FediAID detector.
+- `src/encode_posts.py`: creates normalized post embeddings.
+- `scripts/prepare_opensrc_datasets.py`: prepares the five seeded external-data
+  directories from public raw sources.
+- `scripts/run_opensrc_reproduction.py`: runs and summarizes the 12-dataset,
+  five-seed evaluation.

@@ -27,6 +27,8 @@ env/
 # Data, Outputs, and SOTA directories
 data/
 outputs/
+results/
+logs/
 sota_repos/
 
 # OS files

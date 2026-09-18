@@ -2,14 +2,16 @@
 """Evaluate CSA and baseline models on one or more open-source JSONL datasets.
 
 This script will:
-- discover datasets (default: `data/opensrc/*.jsonl`) or use provided list
+- evaluate explicitly supplied external JSONL datasets
 - for each dataset:
   - evaluate the baseline checkpoint once
   - evaluate the CSA checkpoint across a list of `k` values
 - save aggregated results to an Excel file
 
 Example:
-  python -m src.eval_opensrc --memory data/memory_bank.npz --csacheck outputs/model.pt --baselinecheck outputs/baseline.pt
+    python -m src.eval_opensrc --datasets /path/to/eval/*.jsonl \
+            --memory checkpoints/memory_bank_complete_emb.npz \
+            --csacheck checkpoints/model_k27.pt
 
 If `--csacheck` contains the string "{k}" it will be formatted with the k value
 so you can point at per-k checkpoints (e.g. `outputs/model_k{k}.pt`).
@@ -79,7 +81,7 @@ def load_checkpoint(path: str):
 
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Evaluate CSA and baseline on opensrc datasets")
-    parser.add_argument("--datasets", nargs="*", default=None, help="Paths to JSONL validation files. If omitted, uses `data/opensrc/*.jsonl`.")
+    parser.add_argument("--datasets", nargs="*", default=None, help="Paths to external JSONL evaluation files.")
     parser.add_argument("--memory", required=True, help="Path to community memory .npz file")
     parser.add_argument("--csacheck", default=None, help="Path to CSA checkpoint or pattern containing '{k}'")
     parser.add_argument("--baselinecheck", default=None, help="Path to baseline checkpoint")
@@ -91,7 +93,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--out", default="results/opensrc_eval.xlsx")
     args = parser.parse_args(argv)
     if args.datasets is None or len(args.datasets) == 0:
-        datasets = find_datasets("data/opensrc/*.jsonl")
+        datasets = []
     else:
         datasets = []
         for path in args.datasets:
@@ -101,7 +103,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                 datasets.append(path)
                 
     if not datasets:
-        raise SystemExit("No datasets found (looked for data/opensrc/*.jsonl). Provide --datasets explicitly.")
+        raise SystemExit("No datasets provided. Pass external JSONL files with --datasets.")
     else:
         print(f"Found {len(datasets)} datasets to evaluate.")
     
