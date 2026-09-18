@@ -15,7 +15,11 @@ Example:
 
 If `--csacheck` contains the string "{k}" it will be formatted with the k value
 so you can point at per-k checkpoints (e.g. `outputs/model_k{k}.pt`).
+
+Note:
+Under unsupervised transductive settings, target supervision is not available during evaluation. Consequently, parameter tuning should be prohibited. The default 0.45 lambda is chosen as a natural equal-weight relevance/diversity setting, with a slight shift toward diversity, as advocated in the original MMR formulation.
 """
+
 from __future__ import annotations
 
 import argparse

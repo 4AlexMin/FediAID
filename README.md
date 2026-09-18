@@ -101,10 +101,11 @@ python -m src.train \
   --memory outputs/memory_bank.npz \
   --encoder microsoft/deberta-v3-base \
   --epochs 10 \
-  --k 27 \
-  --lambda_mmr 0.45 \
-  --out outputs/model_k27.pt
+  --k 3 \
+  --lambda_mmr 0.1 \
+  --out outputs/model_k3.pt
 ```
+*`--k` is an integer; `--lambda_mmr` is in [0, 1].*
 
 ### Evaluation
 
@@ -117,11 +118,12 @@ python -m src.eval_opensrc \
   --csacheck /path/to/model.pt \
   --encoder /path/to/encoder \
   --ks 1-30 \
-  --lambda_mmr 0.45 \
+  --lambda_mmr 0.1 \
   --batch_size 32 \
   --device cuda:0 \
   --out results/evaluation.xlsx
 ```
+*`--ks` accepts a range/list; `--lambda_mmr` is in [0, 1].*
 
 The evaluator writes performances for each input file. For
 CPU execution, use `--device cpu` and reduce `--batch_size`, for example `256`.
@@ -129,7 +131,7 @@ CPU execution, use `--device cpu` and reduce `--batch_size`, for example `256`.
 #### Evaluate with released checkpoint
 
 The repository's released checkpoint expects 768-dimensional embeddings,
-retrieves `k=27` community centroids, and uses `lambda_mmr=0.45`:
+retrieves `k=27` community centroids, and uses default MMR lambda w/o target parameter tuning under unsupervised transductive settings:
 
 ```bash
 python -m src.eval_opensrc \
@@ -138,7 +140,6 @@ python -m src.eval_opensrc \
   --csacheck checkpoints/model_k27.pt \
   --encoder microsoft/deberta-v3-base \
   --ks 27 \
-  --lambda_mmr 0.45 \
   --batch_size 1024 \
   --device cuda:0 \
   --out results/evaluation.xlsx
@@ -150,11 +151,14 @@ GPU selection is explicit. Reserve a host GPU at the shell level so the
 process sees it as `cuda:0`:
 
 ```bash
+# `--ks` accepts a range/list; `--lambda_mmr` is in [0, 1].
 CUDA_VISIBLE_DEVICES=3 python -m src.eval_opensrc \
   --datasets /path/to/evaluation/*.jsonl \
   --memory /path/to/memory_bank.npz \
   --csacheck /path/to/model.pt \
-  --ks 1-10 --lambda_mmr 0.45 --device cuda:0
+  --ks 1-30 \
+  --lambda_mmr 0.1 \
+  --device cuda:0
 ```
 
 If raw-text evaluation requires Hugging Face downloads, set `HF_ENDPOINT` or
@@ -173,7 +177,6 @@ open-source evaluation:
 - Five matched seeds: `0`, `1`, `2`, `3`, and `4`.
 - Released checkpoint: `checkpoints/model_k27.pt`.
 - Released memory bank: `checkpoints/memory_bank_complete_emb.npz`.
-- Retrieval: `k=27` and `lambda_mmr=0.45`.
 - Metrics: loss, accuracy, F1, and ROC-AUC for each dataset and seed.
 
 
