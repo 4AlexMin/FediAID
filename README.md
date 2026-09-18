@@ -151,7 +151,6 @@ GPU selection is explicit. Reserve a host GPU at the shell level so the
 process sees it as `cuda:0`:
 
 ```bash
-# `--ks` accepts a range/list; `--lambda_mmr` is in [0, 1].
 CUDA_VISIBLE_DEVICES=3 python -m src.eval_opensrc \
   --datasets /path/to/evaluation/*.jsonl \
   --memory /path/to/memory_bank.npz \
