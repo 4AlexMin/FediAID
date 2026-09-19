@@ -108,7 +108,7 @@ def train(
     k: int = 27,
     max_length: int = 256,
     max_centroid_samples: int = -1,
-    lambda_mmr: float = 0.8,
+    lambda_mmr: float = 0.45,
     threshold: float = 0.5,
     out_path: str = "model.pt",
     device: Optional[str] = None,

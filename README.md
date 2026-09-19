@@ -132,8 +132,7 @@ CPU execution, use `--device cpu` and reduce `--batch_size`, for example `256`.
 
 The released checkpoint expects 768-dimensional embeddings and was developed
 using `k=27` and MMR `lambda=0.8`, selected on Fediverse training and validation
-data. External target-platform evaluation retains `k=27` and uses a fixed
-inference-time `lambda=0.45` uniformly across all target datasets and seeds,
+data. External target-platform evaluation retains `k=27` and uses inference implementation's fixed default `lambda=0.45` uniformly across all target datasets and seeds,
 without target-label tuning. Under this unsupervised transductive protocol,
 target labels are used only to compute evaluation metrics.
 
