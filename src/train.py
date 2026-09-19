@@ -17,9 +17,13 @@ python -m src.train \
   --memory data/memory_bank.npz \
   --encoder roberta-base \
   --epochs 5 \
-  --k 3 \
+  --k 27 \
+  --lambda_mmr 0.8 \
   --out model.pt
 ```
+
+The default k=27 and MMR lambda=0.8 are the model-development settings
+selected using Fediverse training and validation data.
 
 By default the script uses precomputed ``post_emb`` vectors and does not
 update the underlying encoder.  If raw text and an encoder name are
@@ -101,10 +105,10 @@ def train(
     batch_size: int = 16, # 32
     lr: float = 5e-4, # 2e-4
     weight_decay: float = 0.005, # 0.01
-    k: int = 3,
+    k: int = 27,
     max_length: int = 256,
     max_centroid_samples: int = -1,
-    lambda_mmr: float = 0.45,
+    lambda_mmr: float = 0.8,
     threshold: float = 0.5,
     out_path: str = "model.pt",
     device: Optional[str] = None,
@@ -224,8 +228,8 @@ def main() -> None:
     parser.add_argument("--batch_size", type=int, default=32, help="Training batch size")
     parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate")
     parser.add_argument("--weight_decay", type=float, default=0.01, help="Weight decay for AdamW")
-    parser.add_argument("--k", type=int, default=3, help="Number of nearest communities to retrieve")
-    parser.add_argument("--lambda_mmr", type=float, default=0.45, help="MMR lambda for community retrieval (relevance vs diversity)")
+    parser.add_argument("--k", type=int, default=27, help="Number of communities to retrieve with MMR (development default: 27)")
+    parser.add_argument("--lambda_mmr", type=float, default=0.8, help="MMR relevance/diversity trade-off selected on Fediverse train/validation (development default: 0.8)")
     parser.add_argument("--threshold", type=float, default=0.5, help="Probability threshold for converting scores to labels")
     parser.add_argument("--dataset_id", default=None, help="Short identifier for training dataset (used in filenames and metadata)")
     parser.add_argument("--max_centroid_samples", type=int, default=-1, help="Max samples per community to use when building centroids (-1 = all)")

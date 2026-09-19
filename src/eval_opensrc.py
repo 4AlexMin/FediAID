@@ -11,13 +11,19 @@ This script will:
 Example:
     python -m src.eval_opensrc --datasets /path/to/eval/*.jsonl \
             --memory checkpoints/memory_bank_complete_emb.npz \
-            --csacheck checkpoints/model_k27.pt
+            --csacheck checkpoints/model_k27.pt \
+            --ks 27 \
+            --lambda_mmr 0.45
 
 If `--csacheck` contains the string "{k}" it will be formatted with the k value
 so you can point at per-k checkpoints (e.g. `outputs/model_k{k}.pt`).
 
 Note:
-Under unsupervised transductive settings, target supervision is not available during evaluation. Consequently, parameter tuning should be prohibited. The default 0.45 lambda is chosen as a natural equal-weight relevance/diversity setting, with a slight shift toward diversity, as advocated in the original MMR formulation.
+Model development uses k=27 and MMR lambda=0.8, selected using Fediverse
+training and validation data. External target-platform evaluation uses k=27
+and a fixed inference-time lambda=0.45 uniformly across target datasets and
+seeds. Under this unsupervised transductive protocol, target labels are used
+only to compute evaluation metrics, not for inference or parameter selection.
 """
 
 from __future__ import annotations
@@ -90,8 +96,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--csacheck", default=None, help="Path to CSA checkpoint or pattern containing '{k}'")
     parser.add_argument("--baselinecheck", default=None, help="Path to baseline checkpoint")
     parser.add_argument("--encoder", default=None)
-    parser.add_argument("--lambda_mmr", type=float, default=0.45, help="MMR lambda for community retrieval")
-    parser.add_argument("--ks", default="1-10", help="Comma-separated ks or range like '1-10' or '1,2,3'")
+    parser.add_argument("--lambda_mmr", type=float, default=0.45, help="Inference-time MMR lambda (fixed external-evaluation default: 0.45; no target-label tuning)")
+    parser.add_argument("--ks", default="27", help="Comma-separated ks or range like '1-10' or '1,2,3' (external-evaluation default: 27)")
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--device", default=None)
     parser.add_argument("--out", default="results/opensrc_eval.xlsx")
