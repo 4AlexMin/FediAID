@@ -319,6 +319,26 @@ each of the 12 datasets. The final aggregate supports the manuscript's
 cross-platform claims; exact floating-point values may vary slightly across
 hardware and software versions, which is why the comparison uses a tolerance.
 
+### Optional MMR sensitivity
+
+The lambda-sensitivity experiment is separate from the default reproduction
+workflow. It evaluates the released checkpoint with `k=27` on the eight main
+target-platform datasets for `lambda_mmr` values from `0.0` through `1.0` in
+steps of `0.1`. For each lambda, F1 and ROC-AUC are averaged across those eight
+platforms. Run it explicitly with:
+
+```bash
+python scripts/run_lambda_sensitivity.py \
+  --data-root /path/to/evaluation-data \
+  --seed 0 \
+  --device cuda:0
+```
+
+The separate expected summary is stored in
+`expected/opensrc_lambda_sensitivity.csv`. The script uses only the released
+`checkpoints/model_k27.pt`,
+`checkpoints/memory_bank_complete_emb.npz`, and `k=27`.
+
 ## Code entry points
 
 - `src/eval_opensrc.py`: evaluates a FediAID checkpoint on explicit JSONL files.
@@ -329,3 +349,5 @@ hardware and software versions, which is why the comparison uses a tolerance.
   directories from public raw sources.
 - `scripts/run_opensrc_reproduction.py`: runs and summarizes the 12-dataset,
   five-seed evaluation.
+- `scripts/run_lambda_sensitivity.py`: optionally verifies the eight-platform
+  lambda-sensitivity summary.
