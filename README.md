@@ -130,8 +130,12 @@ CPU execution, use `--device cpu` and reduce `--batch_size`, for example `256`.
 
 #### Evaluate with released checkpoint
 
-The repository's released checkpoint expects 768-dimensional embeddings,
-retrieves `k=27` community centroids, and uses default MMR lambda w/o target parameter tuning under unsupervised transductive settings:
+The released checkpoint expects 768-dimensional embeddings and was developed
+using `k=27` and MMR `lambda=0.8`, selected on Fediverse training and validation
+data. External target-platform evaluation retains `k=27` and uses a fixed
+inference-time `lambda=0.45` uniformly across all target datasets and seeds,
+without target-label tuning. Under this unsupervised transductive protocol,
+target labels are used only to compute evaluation metrics.
 
 ```bash
 python -m src.eval_opensrc \
