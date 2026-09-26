@@ -218,6 +218,7 @@ class AIGTDataset(Dataset):
                 vec = np.asarray(r["post_emb"], dtype=np.float32)
             else:
                 vec = self._embed_text(r["text"])
+                vec = _normalize(vec)
 
             groups.setdefault(cid, []).append(vec)
 
@@ -238,7 +239,9 @@ class AIGTDataset(Dataset):
             if self.use_precomputed:
                 vecs.append(np.asarray(r["post_emb"], dtype=np.float32))
             else:
-                vecs.append(self._embed_text(r["text"]))
+                vec = self._embed_text(r["text"])
+                vec = _normalize(vec)
+                vecs.append(vec)
 
         if not vecs:
             raise ValueError("No data available to build global centroid.")
