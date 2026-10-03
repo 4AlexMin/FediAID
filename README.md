@@ -103,7 +103,6 @@ Build a normalized centroid for each community from the training data:
 
 ```bash
 python -m src.memory \
-  --mode build \
   --data /path/to/train_emb.jsonl \
   --model microsoft/deberta-v3-base \
   --out outputs/memory_bank.npz
@@ -169,6 +168,50 @@ python -m src.eval_opensrc \
   --out results/evaluation.xlsx
 ```
 
+
+#### Note: Released checkpoint training provenance
+
+The released checkpoint was trained on the
+[Fediverse Deepfake-Text Corpus](https://doi.org/10.5281/zenodo.22811976). Concatenating
+`corpus_01.jsonl` through `corpus_09.jsonl` in numeric order yields 1,003,993 records.
+The train split (first 80%) contains 803,195 records. The remaining 200,798 records form the validation split.
+The recorded training configuration is:
+
+| Setting | Value |
+|---|---|
+| Encoder | `microsoft/deberta-v3-base` |
+| Retrieved communities | `k=27` |
+| Training-time MMR lambda | `0.8` |
+| Epochs | 10 |
+| Batch size | 32 |
+| Learning rate | `2e-4` |
+| Weight decay | `0.01` |
+| Maximum sequence length | 256 |
+
+The following command corresponds training under the recorded settings. Prepare the
+training data, validation data, and memory bank (released memory banck) locally, precomputed embeddings for both train and validation splits, and then:
+
+
+```bash
+python -m src.train \
+  --train /path/to/train_emb.jsonl \
+  --val /path/to/validation_emb.jsonl \
+  --memory /path/to/memory_bank.npz \
+  --encoder microsoft/deberta-v3-base \
+  --epochs 10 \
+  --batch_size 32 \
+  --lr 0.0002 \
+  --weight_decay 0.01 \
+  --k 27 \
+  --lambda_mmr 0.8 \
+  --max_length 256 \
+  --out outputs/model_k27.pt
+```
+
+
+
+
+
 ## Runtime notes
 
 GPU selection is explicit. Reserve a host GPU at the shell level so the
@@ -202,26 +245,6 @@ open-source evaluation:
 - Released memory bank: `checkpoints/memory_bank_complete_emb.npz`.
 - Metrics: loss, accuracy, F1, and ROC-AUC for each dataset and seed.
 
-## Released checkpoint training provenance
-
-The released checkpoint was trained on the
-[Fediverse Deepfake-Text Corpus](https://doi.org/10.5281/zenodo.22811976). Concatenating
-`corpus_01.jsonl` through `corpus_09.jsonl` in numeric order yields 1,003,993 records.
-The train split (first 80%) contains 803,195 records.
-The recorded training configuration is:
-
-| Setting | Value |
-|---|---|
-| Encoder | `microsoft/deberta-v3-base` |
-| Retrieved communities | `k=27` |
-| Training-time MMR lambda | `0.8` |
-| Epochs | 10 |
-| Batch size | 32 |
-| Learning rate | `2e-4` |
-| Weight decay | `0.01` |
-| Maximum sequence length | 256 |
-
-
 
 
 The manuscript's eight-platform main results are expected to be approximately:
@@ -233,6 +256,7 @@ The manuscript's eight-platform main results are expected to be approximately:
 
 The four source-variation datasets are included in the 12-dataset workflow and
 in the per-dataset expected metrics.
+
 
 ## External evaluation datasets
 
@@ -290,7 +314,7 @@ the data-preparation dependencies, then run:
 
 ```bash
 python -m pip install -r requirements-data.txt
-python scripts/prepare_opensrc_datasets.py \
+python -m scripts.prepare_opensrc_datasets \
   --source-root /path/to/raw-sources \
   --out-root /path/to/evaluation-data
 ```

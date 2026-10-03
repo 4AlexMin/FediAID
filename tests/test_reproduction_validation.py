@@ -1,4 +1,5 @@
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -12,6 +13,14 @@ from run_opensrc_reproduction import (
     validate_mean_reference,
     validate_per_seed_reference,
     validate_seed_results,
+)
+from run_lambda_sensitivity import (
+    DEFAULT_LAMBDAS,
+    TARGET_DATASETS,
+    compare_sensitivity_results,
+    load_expected_reference,
+    validate_dataset_results,
+    validate_sensitivity_table,
 )
 
 
@@ -91,6 +100,89 @@ class ReproductionValidationTests(unittest.TestCase):
         reference = pd.DataFrame(rows[:-1])
         with self.assertRaisesRegex(ValueError, "dataset/seed coverage mismatch"):
             validate_per_seed_reference(reference)
+
+
+class LambdaSensitivityValidationTests(unittest.TestCase):
+    def make_dataset_results(self):
+        return pd.DataFrame(
+            {
+                "dataset": TARGET_DATASETS,
+                "model": ["csa"] * len(TARGET_DATASETS),
+                "k": [27] * len(TARGET_DATASETS),
+                "loss": [0.5] * len(TARGET_DATASETS),
+                "acc": [0.8] * len(TARGET_DATASETS),
+                "f1": [0.8] * len(TARGET_DATASETS),
+                "auc": [0.9] * len(TARGET_DATASETS),
+            }
+        )
+
+    def make_reference(self):
+        return pd.DataFrame(
+            {
+                "lambda_mmr": DEFAULT_LAMBDAS,
+                "f1_mean": [0.8] * len(DEFAULT_LAMBDAS),
+                "auc_mean": [0.9] * len(DEFAULT_LAMBDAS),
+            }
+        )
+
+    def test_all_eight_dataset_results_pass(self):
+        validated = validate_dataset_results(self.make_dataset_results(), 0.5, 27)
+        self.assertEqual(set(validated["dataset"]), set(TARGET_DATASETS))
+
+    def test_duplicate_dataset_result_fails(self):
+        result = self.make_dataset_results()
+        result.loc[7, "dataset"] = result.loc[0, "dataset"]
+        with self.assertRaisesRegex(ValueError, "duplicate dataset"):
+            validate_dataset_results(result, 0.5, 27)
+
+    def test_missing_dataset_result_fails(self):
+        result = self.make_dataset_results().iloc[:-1]
+        with self.assertRaisesRegex(ValueError, "exactly eight dataset rows"):
+            validate_dataset_results(result, 0.5, 27)
+
+    def test_non_finite_dataset_metric_fails(self):
+        result = self.make_dataset_results()
+        result.loc[0, "f1"] = float("nan")
+        with self.assertRaisesRegex(ValueError, "non-finite f1"):
+            validate_dataset_results(result, 0.5, 27)
+
+    def test_all_eleven_lambda_settings_pass(self):
+        validated = validate_sensitivity_table(self.make_reference(), "Test reference")
+        self.assertEqual(set(validated["lambda_mmr"]), set(DEFAULT_LAMBDAS))
+
+    def test_incomplete_lambda_reference_fails(self):
+        reference = self.make_reference().iloc[:-1]
+        with self.assertRaisesRegex(ValueError, "exactly 11 lambda settings"):
+            validate_sensitivity_table(reference, "Test reference")
+
+    def test_duplicate_lambda_reference_fails(self):
+        reference = self.make_reference()
+        reference.loc[10, "lambda_mmr"] = 0.0
+        with self.assertRaisesRegex(ValueError, "duplicate lambda_mmr"):
+            validate_sensitivity_table(reference, "Test reference")
+
+    def test_non_finite_reference_metric_fails(self):
+        reference = self.make_reference()
+        reference.loc[0, "auc_mean"] = float("nan")
+        with self.assertRaisesRegex(ValueError, "non-finite auc_mean"):
+            validate_sensitivity_table(reference, "Test reference")
+
+    def test_missing_reference_file_fails(self):
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            missing_path = Path(temporary_dir) / "missing.csv"
+            with self.assertRaisesRegex(FileNotFoundError, "reference is missing"):
+                load_expected_reference(missing_path)
+
+    def test_sensitivity_summary_matches_reference(self):
+        reference = self.make_reference()
+        compare_sensitivity_results(reference, reference.copy(), 0.02)
+
+    def test_sensitivity_summary_mismatch_fails(self):
+        actual = self.make_reference()
+        expected = self.make_reference()
+        expected.loc[0, "f1_mean"] = 0.7
+        with self.assertRaisesRegex(RuntimeError, "f1_mean differs"):
+            compare_sensitivity_results(actual, expected, 0.02)
 
 
 if __name__ == "__main__":
