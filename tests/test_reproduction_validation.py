@@ -2,6 +2,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -10,9 +11,12 @@ from run_opensrc_reproduction import (
     EXPECTED_DATASET_NAMES,
     EXPECTED_SEEDS,
     canonical_dataset_name,
+    load_summary,
+    parse_args,
     validate_mean_reference,
     validate_per_seed_reference,
     validate_seed_results,
+    validate_tolerance,
 )
 from run_lambda_sensitivity import (
     DEFAULT_LAMBDAS,
@@ -100,6 +104,21 @@ class ReproductionValidationTests(unittest.TestCase):
         reference = pd.DataFrame(rows[:-1])
         with self.assertRaisesRegex(ValueError, "dataset/seed coverage mismatch"):
             validate_per_seed_reference(reference)
+
+    def test_tolerance_must_be_finite_and_non_negative(self):
+        self.assertEqual(validate_tolerance("0.02"), 0.02)
+        for tolerance in ("nan", "inf", "-inf", "-0.01"):
+            with self.subTest(tolerance=tolerance):
+                with patch("sys.argv", ["run_opensrc_reproduction.py", "--data-root", "data", "--tolerance", tolerance]):
+                    with self.assertRaises(SystemExit) as error:
+                        parse_args()
+                self.assertEqual(error.exception.code, 2)
+
+    def test_load_summary_rejects_non_finite_tolerance_first(self):
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            missing_path = Path(temporary_dir) / "missing.csv"
+            with self.assertRaisesRegex(ValueError, "finite, non-negative"):
+                load_summary({}, Path(temporary_dir), missing_path, missing_path, float("nan"))
 
 
 class LambdaSensitivityValidationTests(unittest.TestCase):

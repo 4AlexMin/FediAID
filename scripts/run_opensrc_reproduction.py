@@ -151,6 +151,23 @@ def validate_per_seed_reference(expected):
             raise ValueError(f"Expected per-seed {column} values must be in [0, 1]")
 
 
+def validate_tolerance(tolerance: float) -> float:
+    try:
+        value = float(tolerance)
+    except (TypeError, ValueError) as error:
+        raise ValueError("Tolerance must be a finite, non-negative number") from error
+    if not math.isfinite(value) or value < 0.0:
+        raise ValueError("Tolerance must be a finite, non-negative number")
+    return value
+
+
+def parse_tolerance(value: str) -> float:
+    try:
+        return validate_tolerance(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(str(error)) from error
+
+
 def parse_args() -> argparse.Namespace:
     repo_root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
@@ -208,7 +225,7 @@ def parse_args() -> argparse.Namespace:
         default=repo_root / "expected" / "opensrc_metrics_per_seed.csv",
         help="Per-dataset, per-seed F1/AUC references used for the tolerance check.",
     )
-    parser.add_argument("--tolerance", type=float, default=0.02)
+    parser.add_argument("--tolerance", type=parse_tolerance, default=0.02)
     parser.add_argument("--no-check-expected", action="store_true")
     return parser.parse_args()
 
@@ -222,6 +239,7 @@ def load_summary(
 ) -> None:
     import pandas as pd
 
+    tolerance = validate_tolerance(tolerance)
     if set(result_paths) != EXPECTED_SEEDS:
         raise ValueError(f"Expected results for seeds {sorted(EXPECTED_SEEDS)}, got {sorted(result_paths)}")
     if not expected_path.is_file():
