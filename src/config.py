@@ -10,6 +10,17 @@ from __future__ import annotations
 
 import os
 
+DEFAULT_ENCODER = "microsoft/deberta-v3-base"
+DEFAULT_ENCODER_REVISION = "8ccc9b6f36199bec6961081d44eb72fb3f7353f3"
+
+
+def resolve_encoder_revision(model_name: str | None, revision: str | None = None) -> str | None:
+    if revision:
+        return revision
+    if model_name == DEFAULT_ENCODER:
+        return DEFAULT_ENCODER_REVISION
+    return None
+
 
 
 def set_hf_mirror(url: str = "https://hf-mirror.com") -> None:
@@ -52,6 +63,9 @@ def get_default_device() -> str:
 
 
 __all__ = [
+    "DEFAULT_ENCODER",
+    "DEFAULT_ENCODER_REVISION",
+    "resolve_encoder_revision",
     "set_hf_mirror",
     "get_default_device",
 ]

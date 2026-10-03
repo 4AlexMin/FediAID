@@ -33,7 +33,7 @@ import pandas as pd
 from typing import Sequence
 import json
 
-from src.config import get_default_device, set_hf_mirror
+from src.config import get_default_device, resolve_encoder_revision, set_hf_mirror
 set_hf_mirror()
 from .dataset import AIGTDataset, CommunityMemory
 from .model.csa import CSADetector, BaselineDetector
@@ -91,6 +91,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--csacheck", default=None, help="Path to CSA checkpoint or pattern containing '{k}'")
     parser.add_argument("--baselinecheck", default=None, help="Path to baseline checkpoint")
     parser.add_argument("--encoder", default=None)
+    parser.add_argument("--encoder_revision", default=None, help="Hugging Face model revision for raw-text encoding")
     parser.add_argument("--lambda_mmr", type=float, default=0.45, help="MMR lambda for community retrieval")
     parser.add_argument("--ks", default="1-10", help="Comma-separated ks or range like '1-10' or '1,2,3'")
     parser.add_argument("--batch_size", type=int, default=32)
@@ -128,6 +129,7 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     device = torch.device(args.device if args.device else get_default_device())
     memory = CommunityMemory(args.memory)
+    encoder_revision = resolve_encoder_revision(args.encoder, args.encoder_revision)
 
     rows = []
     for ds in datasets:
@@ -141,6 +143,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             model_name=args.encoder,
             k=None,
             lambda_mmr=args.lambda_mmr,
+            encoder_revision=encoder_revision,
             device=device
         )
 

@@ -18,6 +18,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from src.config import DEFAULT_ENCODER, DEFAULT_ENCODER_REVISION
+
 SEEDS = (0, 1, 2, 3, 4)
 TEST_FRACTION = 0.2
 PLATFORMS = ("medium", "quora", "reddit")
@@ -149,7 +151,15 @@ def prepare_deepfake(path: Path, out_root: Path, seeds: list[int]) -> None:
         write_jsonl(out_root / f"opensrc_platforms_seed{seed}" / "deepfake.jsonl", test)
 
 
-def encode_outputs(repo_root: Path, out_root: Path, seeds: list[int], encoder: str, device: str | None, batch_size: int) -> None:
+def encode_outputs(
+    repo_root: Path,
+    out_root: Path,
+    seeds: list[int],
+    encoder: str,
+    revision: str | None,
+    device: str | None,
+    batch_size: int,
+) -> None:
     for seed in seeds:
         raw_dir = out_root / f"opensrc_platforms_seed{seed}"
         emb_dir = out_root / f"opensrc_platforms_seed{seed}_emb"
@@ -165,6 +175,8 @@ def encode_outputs(repo_root: Path, out_root: Path, seeds: list[int], encoder: s
                 str(output_path),
                 "--encoder",
                 encoder,
+                "--revision",
+                revision or DEFAULT_ENCODER_REVISION,
                 "--batch_size",
                 str(batch_size),
             ]
@@ -179,7 +191,8 @@ def main() -> int:
     parser.add_argument("--out-root", type=Path, required=True)
     parser.add_argument("--seeds", nargs="+", type=int, default=list(SEEDS))
     parser.add_argument("--encode", action="store_true")
-    parser.add_argument("--encoder", default="microsoft/deberta-v3-base")
+    parser.add_argument("--encoder", default=DEFAULT_ENCODER)
+    parser.add_argument("--encoder-revision", default=DEFAULT_ENCODER_REVISION)
     parser.add_argument("--device", default=None)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--multisocial-csv", type=Path, default=None)
@@ -205,7 +218,15 @@ def main() -> int:
     prepare_deepfake(deepfake_jsonl, out_root, args.seeds)
     if args.encode:
         repo_root = Path(__file__).resolve().parents[1]
-        encode_outputs(repo_root, out_root, args.seeds, args.encoder, args.device, args.batch_size)
+        encode_outputs(
+            repo_root,
+            out_root,
+            args.seeds,
+            args.encoder,
+            args.encoder_revision,
+            args.device,
+            args.batch_size,
+        )
     print(f"Prepared {len(args.seeds)} seed directories under {out_root}")
     return 0
 

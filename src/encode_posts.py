@@ -20,7 +20,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from src.config import get_default_device, set_hf_mirror
+from src.config import resolve_encoder_revision, get_default_device, set_hf_mirror
 
 # Set HF mirror before importing transformers
 set_hf_mirror()
@@ -122,6 +122,7 @@ def process_file(
     max_length: int,
     skip_existing: bool,
     device_str: str | None,
+    revision: str | None = None,
 ) -> None:
     inp = Path(in_path)
     outp = Path(out_path) if out_path else inp.with_name(inp.stem + "_emb.jsonl")
@@ -129,8 +130,10 @@ def process_file(
 
     device = torch.device(device_str if device_str else get_default_device())
 
-    tokenizer = AutoTokenizer.from_pretrained(encoder, use_fast=True)
-    model = AutoModel.from_pretrained(encoder).to(device)
+    revision = resolve_encoder_revision(encoder, revision)
+    model_kwargs = {"revision": revision} if revision else {}
+    tokenizer = AutoTokenizer.from_pretrained(encoder, use_fast=True, **model_kwargs)
+    model = AutoModel.from_pretrained(encoder, **model_kwargs).to(device)
     model.eval()
 
     io_chunk_size = batch_size * 16  # 🔥 decoupled IO batching
@@ -189,6 +192,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--in", dest="inp", required=True, help="Input JSONL")
     p.add_argument("--out", default=None, help="Output JSONL")
     p.add_argument("--encoder", required=True, help="HF encoder name")
+    p.add_argument("--revision", default=None, help="Pinned Hugging Face model revision (defaults to the tested DeBERTa snapshot for microsoft/deberta-v3-base).")
     p.add_argument("--batch_size", type=int, default=64, help="GPU batch size")
     p.add_argument("--max_length", type=int, default=256, help="Max token length")
     p.add_argument("--skip_existing", action="store_true", help="Skip records with post_emb")
@@ -206,6 +210,7 @@ def main() -> None:
         max_length=args.max_length,
         skip_existing=args.skip_existing,
         device_str=args.device,
+        revision=args.revision,
     )
 
 

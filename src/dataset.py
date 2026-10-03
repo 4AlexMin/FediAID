@@ -10,6 +10,7 @@ from torch.utils.data import Dataset
 from transformers import AutoTokenizer, AutoModel
 
 from src.io import load_jsonl_dataset
+from src.config import resolve_encoder_revision
 
 def _normalize(vec: np.ndarray, eps: float = 1e-8) -> np.ndarray:
     norm = np.linalg.norm(vec, axis=-1, keepdims=True) + eps
@@ -121,6 +122,7 @@ class AIGTDataset(Dataset):
         device: Optional[torch.device] = None,
         max_centroid_samples: int = -1,
         lambda_mmr: float = 0.45,
+        encoder_revision: Optional[str] = None,
     ):
         self.rows = load_jsonl_dataset(jsonl_path)
         self.memory = memory
@@ -129,6 +131,7 @@ class AIGTDataset(Dataset):
         self.max_length = max_length
         self.max_centroid_samples = max_centroid_samples
         self.lambda_mmr = lambda_mmr
+        self.encoder_revision = resolve_encoder_revision(model_name, encoder_revision)
 
         self.has_community = "community_id" in self.rows[0]
         self.use_precomputed = "post_emb" in self.rows[0]
@@ -139,8 +142,10 @@ class AIGTDataset(Dataset):
 
         if not self.use_precomputed:
             assert tokenizer_name and model_name
-            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-            self.encoder = AutoModel.from_pretrained(model_name).to(device)
+            tokenizer_kwargs = {"revision": self.encoder_revision} if self.encoder_revision else {}
+            model_kwargs = {"revision": self.encoder_revision} if self.encoder_revision else {}
+            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, **tokenizer_kwargs)
+            self.encoder = AutoModel.from_pretrained(model_name, **model_kwargs).to(device)
             self.encoder.eval()
 
         # Build dataset centroid bank

@@ -11,11 +11,17 @@ community representations through Community Similarity Attention (CSA) module.
 ├── checkpoints/
 │   ├── model_k27.pt
 │   └── memory_bank_complete_emb.npz
+├── LICENSE
 ├── expected/
-│   └── opensrc_metrics.csv
+│   ├── opensrc_lambda_sensitivity.csv
+│   ├── opensrc_metrics.csv
+│   └── opensrc_metrics_per_seed.csv
 ├── scripts/
+│   ├── run_lambda_sensitivity.py
 │   ├── prepare_opensrc_datasets.py
 │   └── run_opensrc_reproduction.py
+├── tests/
+│   └── test_reproduction_validation.py
 ├── src/
 │   ├── dataset.py
 │   ├── eval_opensrc.py
@@ -30,7 +36,8 @@ community representations through Community Similarity Attention (CSA) module.
 ```
 
 The repository includes source code, a released checkpoint, and a community
-memory bank. The checkpoint-specific settings are described under
+memory bank. FediAID's source code is released under the MIT License (see
+`LICENSE`). The checkpoint-specific settings are described under
 `Evaluate with released checkpoint`.
 
 ## Getting started
@@ -43,14 +50,25 @@ For training and general use:
 python -m pip install -r requirements.txt
 ```
 
-For evaluation with precomputed embeddings:
+For reproduction:
+
+```bash
+conda env create -f environment.yml
+conda activate fediaid-reproduction
+```
+
+The validated reproduction environment is specified in `environment.yml`:
+Python 3.10.21, PyTorch 2.14.1+cu130, Transformers 4.57.6, Tokenizers 0.22.2,
+and Hugging Face Hub 0.36.2. It includes SentencePiece and pins protobuf below
+version 5, which is required by the DeBERTa tokenizer. The equivalent pip
+install is:
 
 ```bash
 python -m pip install -r requirements-reproduce.txt
 ```
 
 A CUDA-capable GPU is recommended for large datasets. CPU execution is
-supported with a smaller batch size.
+supported with a smaller batch size. As a consequence, CPU-only deepfake-text detection is supported by FediAID.
 
 ### Prepare your data.
 
@@ -75,8 +93,9 @@ python -m src.encode_posts \
   --device cuda:0
 ```
 
-*The `--encoder` value is an example backbone and can be replaced with another compatible Hugging Face encoder. The training data, embeddings, and memory
-bank must use compatible representations.*
+Use the same compatible Hugging Face backbone for `--encoder` and `--model`.
+Ensure post embeddings and memory-bank vectors use compatible encoder
+representations.
 
 ### Build a community memory bank
 
@@ -136,6 +155,8 @@ data. External target-platform evaluation retains `k=27` and uses inference impl
 without target-label tuning. Under this unsupervised transductive protocol,
 target labels are used only to compute evaluation metrics.
 
+For the pinned encoder revision (specific `DeBERTa` version) used in raw-text reproduction, see the `Reproduction` section.
+
 ```bash
 python -m src.eval_opensrc \
   --datasets /path/to/evaluation/*.jsonl \
@@ -180,6 +201,26 @@ open-source evaluation:
 - Released checkpoint: `checkpoints/model_k27.pt`.
 - Released memory bank: `checkpoints/memory_bank_complete_emb.npz`.
 - Metrics: loss, accuracy, F1, and ROC-AUC for each dataset and seed.
+
+## Released checkpoint training provenance
+
+The released checkpoint was trained on the
+[Fediverse Deepfake-Text Corpus](https://doi.org/10.5281/zenodo.22811976). Concatenating
+`corpus_01.jsonl` through `corpus_09.jsonl` in numeric order yields 1,003,993 records.
+The train split (first 80%) contains 803,195 records.
+The recorded training configuration is:
+
+| Setting | Value |
+|---|---|
+| Encoder | `microsoft/deberta-v3-base` |
+| Retrieved communities | `k=27` |
+| Training-time MMR lambda | `0.8` |
+| Epochs | 10 |
+| Batch size | 32 |
+| Learning rate | `2e-4` |
+| Weight decay | `0.01` |
+| Maximum sequence length | 256 |
+
 
 
 
@@ -270,22 +311,42 @@ for seed in 0 1 2 3 4; do
       --in "$input" \
       --out "/path/to/evaluation-data/opensrc_platforms_seed${seed}_emb/${name}_emb.jsonl" \
       --encoder microsoft/deberta-v3-base \
+      --revision 8ccc9b6f36199bec6961081d44eb72fb3f7353f3 \
       --batch_size 256 \
       --device cuda:0
   done
 done
 ```
-*If this step is skipped, evaluation will still work and compute embeddings on the fly.*
+
+*Precomputed embeddings are recommended for speed. If this step is skipped, evaluation will still work and compute embeddings on the fly.*
+
+
 
 ## Reproduce the evaluation
 
-Using the prepared Zenodo bundle or locally generated embedding directories:
+Using the locally generated embedding directories:
 
 ```bash
 python scripts/run_opensrc_reproduction.py \
   --data-root /path/to/evaluation-data \
   --device cuda:0
 ```
+
+To use the raw Zenodo files directly w/o precomputed embeddings, select the raw directory template explicitly:
+
+```bash
+python scripts/run_opensrc_reproduction.py \
+  --data-root /path/to/evaluation-data \
+  --data-template 'opensrc_platforms_seed{seed}' \
+  --encoder microsoft/deberta-v3-base \
+  --encoder-revision 8ccc9b6f36199bec6961081d44eb72fb3f7353f3 \
+  --device cuda:0
+```
+
+This raw-text route is slower. The runner maps raw dataset filenames to the
+canonical embedded-dataset names when checking the expected metrics.
+
+
 
 For CPU execution:
 
@@ -299,7 +360,10 @@ python scripts/run_opensrc_reproduction.py \
 The runner evaluates all 12 datasets for seeds 0 through 4, writes one result
 workbook per seed under `results/opensrc_reproduction/`, and writes
 `summary.csv`. It compares per-dataset mean F1 and ROC-AUC with
-`expected/opensrc_metrics.csv` using a default tolerance of 0.02.
+`expected/opensrc_metrics.csv` and per-seed F1/AUC with
+`expected/opensrc_metrics_per_seed.csv` using an absolute tolerance of 0.02.
+It fails on missing references, missing/duplicate datasets, duplicate
+dataset/seed pairs, or non-finite metrics.
 
 For a partial smoke test, select one seed and skip the five-seed comparison:
 
@@ -313,10 +377,12 @@ python scripts/run_opensrc_reproduction.py \
 
 ## Expected results
 
-The expected metrics file records the five-seed mean and standard deviation for
-each of the 12 datasets. The final aggregate supports the manuscript's
-cross-platform claims; exact floating-point values may vary slightly across
-hardware and software versions, which is why the comparison uses a tolerance.
+`expected/opensrc_metrics.csv` records the five-seed mean and standard deviation
+for each of the 12 datasets. `expected/opensrc_metrics_per_seed.csv` records
+F1/AUC for each dataset and seed to help diagnose platform-specific variation.
+The final aggregate supports the manuscript's cross-platform claims; small
+floating-point differences can occur across compatible hardware/software
+builds, so both references are checked with an absolute tolerance.
 
 ### Optional MMR sensitivity
 

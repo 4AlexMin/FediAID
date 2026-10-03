@@ -21,7 +21,7 @@ import torch
 import numpy as np
 
 from src.io import load_jsonl_dataset
-from src.config import get_default_device, set_hf_mirror
+from src.config import get_default_device, resolve_encoder_revision, set_hf_mirror
 set_hf_mirror()
 
 from transformers import AutoModel, AutoTokenizer
@@ -37,6 +37,7 @@ def build_memory(
     output_path: str,
     model_name: str = "roberta-base",
     max_length: int = 256,
+    revision: Optional[str] = None,
 ) -> None:
     """Compute community centroids and save to a ``.npz`` file.
 
@@ -55,8 +56,10 @@ def build_memory(
     use_precomputed = "post_emb" in rows[0]
     # Prepare encoder if needed
     if not use_precomputed:
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModel.from_pretrained(model_name)
+        revision = resolve_encoder_revision(model_name, revision)
+        model_kwargs = {"revision": revision} if revision else {}
+        tokenizer = AutoTokenizer.from_pretrained(model_name, **model_kwargs)
+        model = AutoModel.from_pretrained(model_name, **model_kwargs)
         model.eval()
 
         # choose device using the project's config helper; caller should manually
@@ -127,8 +130,9 @@ def main() -> None:
     parser.add_argument(
         "--max_length", type=int, default=256, help="Maximum token length for encoding"
     )
+    parser.add_argument("--revision", default=None, help="Pinned Hugging Face model revision.")
     args = parser.parse_args()
-    build_memory(args.data, args.out, args.model, args.max_length)
+    build_memory(args.data, args.out, args.model, args.max_length, args.revision)
 
 
 if __name__ == "__main__":

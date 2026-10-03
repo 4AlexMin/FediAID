@@ -46,7 +46,7 @@ from tqdm import tqdm
 import os
 
 
-from src.config import get_default_device, set_hf_mirror
+from src.config import get_default_device, resolve_encoder_revision, set_hf_mirror
 set_hf_mirror()
 
 from .dataset import AIGTDataset, CommunityMemory
@@ -110,9 +110,11 @@ def train(
     out_path: str = "model.pt",
     device: Optional[str] = None,
     dataset_id: Optional[str] = None,
+    encoder_revision: Optional[str] = None,
 ) -> None:
 
     dev = torch.device(device if device else get_default_device())
+    encoder_revision = resolve_encoder_revision(encoder_name, encoder_revision)
     
     # Load memory
     memory = CommunityMemory(memory_path)
@@ -128,6 +130,7 @@ def train(
         max_length=max_length,
         max_centroid_samples=max_centroid_samples,
         lambda_mmr=lambda_mmr,
+        encoder_revision=encoder_revision,
         device=dev,
     )
     val_ds = AIGTDataset(
@@ -139,6 +142,7 @@ def train(
         max_length=max_length,
         max_centroid_samples=max_centroid_samples,
         lambda_mmr=lambda_mmr,
+        encoder_revision=encoder_revision,
         device=dev,
     )
     # Create model
@@ -192,6 +196,7 @@ def train(
             "lambda_mmr": lambda_mmr,
             "threshold": threshold,
             "encoder": encoder_name,
+            "encoder_revision": encoder_revision,
             "dataset_id": dataset_id,
             "best_acc": float(best_acc),
             "best_f1": float(best_f1),
@@ -221,6 +226,7 @@ def main() -> None:
             " embeddings must be precomputed in post_emb field."
         ),
     )
+    parser.add_argument("--encoder_revision", default=None, help="Hugging Face model revision for raw-text encoding")
     parser.add_argument("--epochs", type=int, default=5, help="Number of training epochs")
     parser.add_argument("--batch_size", type=int, default=32, help="Training batch size")
     parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate")
@@ -250,6 +256,7 @@ def main() -> None:
         dataset_id=args.dataset_id,
         max_centroid_samples=args.max_centroid_samples,
         lambda_mmr=args.lambda_mmr,
+        encoder_revision=args.encoder_revision,
         threshold=args.threshold,
     )
 
