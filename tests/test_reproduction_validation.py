@@ -1,4 +1,3 @@
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -6,8 +5,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from run_opensrc_reproduction import (
+from scripts.run_opensrc_reproduction import (
     EXPECTED_DATASET_NAMES,
     EXPECTED_SEEDS,
     canonical_dataset_name,
@@ -18,7 +16,7 @@ from run_opensrc_reproduction import (
     validate_seed_results,
     validate_tolerance,
 )
-from run_lambda_sensitivity import (
+from scripts.run_lambda_sensitivity import (
     DEFAULT_LAMBDAS,
     TARGET_DATASETS,
     compare_sensitivity_results,
