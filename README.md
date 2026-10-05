@@ -427,10 +427,7 @@ python scripts/run_lambda_sensitivity.py \
   --device cuda:0
 ```
 
-The per-platform, per-seed results and five-seed summary are written to
-`results/lambda_sensitivity_per_seed.csv` and
-`results/lambda_sensitivity_summary.csv`. Expected aggregate and per-seed
-references are stored in `expected/opensrc_lambda_sensitivity.csv` and
+Expected results are stored in `expected/opensrc_lambda_sensitivity.csv` and
 `expected/opensrc_lambda_sensitivity_per_seed.csv`. The script uses only the
 released `checkpoints/model_k27.pt`,
 `checkpoints/memory_bank_complete_emb.npz`, and `k=27`.
