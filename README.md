@@ -14,6 +14,7 @@ community representations through Community Similarity Attention (CSA) module.
 ├── LICENSE
 ├── expected/
 │   ├── opensrc_lambda_sensitivity.csv
+│   ├── opensrc_lambda_sensitivity_per_seed.csv
 │   ├── opensrc_metrics.csv
 │   └── opensrc_metrics_per_seed.csv
 ├── scripts/
@@ -413,19 +414,25 @@ builds, so both references are checked with an absolute tolerance.
 The lambda-sensitivity experiment is separate from the default reproduction
 workflow. It evaluates the released checkpoint with `k=27` on the eight main
 target-platform datasets for `lambda_mmr` values from `0.0` through `1.0` in
-steps of `0.1`. For each lambda, F1 and ROC-AUC are averaged across those eight
-platforms. Run it explicitly with:
+steps of `0.1` for each of seeds `0` through `4`. For each seed and lambda,
+the workflow records F1 and ROC-AUC for each of the eight platforms. For each
+lambda, it first averages each platform's metric over the five seeds, then
+reports the unweighted mean and population standard deviation (`ddof=0`) across
+the eight platform-level means. This SD is across platforms, not seeds. Run it
+explicitly with:
 
 ```bash
 python scripts/run_lambda_sensitivity.py \
   --data-root /path/to/evaluation-data \
-  --seed 0 \
   --device cuda:0
 ```
 
-The separate expected summary is stored in
-`expected/opensrc_lambda_sensitivity.csv`. The script uses only the released
-`checkpoints/model_k27.pt`,
+The per-platform, per-seed results and five-seed summary are written to
+`results/lambda_sensitivity_per_seed.csv` and
+`results/lambda_sensitivity_summary.csv`. Expected aggregate and per-seed
+references are stored in `expected/opensrc_lambda_sensitivity.csv` and
+`expected/opensrc_lambda_sensitivity_per_seed.csv`. The script uses only the
+released `checkpoints/model_k27.pt`,
 `checkpoints/memory_bank_complete_emb.npz`, and `k=27`.
 
 ## Code entry points

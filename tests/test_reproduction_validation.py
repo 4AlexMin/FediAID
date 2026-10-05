@@ -18,11 +18,15 @@ from scripts.run_opensrc_reproduction import (
 )
 from scripts.run_lambda_sensitivity import (
     DEFAULT_LAMBDAS,
+    EXPECTED_SEEDS as SENSITIVITY_SEEDS,
     TARGET_DATASETS,
     compare_sensitivity_results,
     load_expected_reference,
+    load_expected_per_seed_reference,
+    summarize_sensitivity_results,
     validate_dataset_results,
-    validate_sensitivity_table,
+    validate_sensitivity_per_seed_table,
+    validate_sensitivity_summary,
 )
 
 
@@ -133,14 +137,24 @@ class LambdaSensitivityValidationTests(unittest.TestCase):
             }
         )
 
-    def make_reference(self):
+    def make_per_seed_reference(self):
         return pd.DataFrame(
-            {
-                "lambda_mmr": DEFAULT_LAMBDAS,
-                "f1_mean": [0.8] * len(DEFAULT_LAMBDAS),
-                "auc_mean": [0.9] * len(DEFAULT_LAMBDAS),
-            }
+            [
+                {
+                    "lambda_mmr": lambda_mmr,
+                    "seed": seed,
+                    "dataset": dataset,
+                    "f1": 0.6 + dataset_index * 0.01 + seed * 0.001,
+                    "auc": 0.7 + dataset_index * 0.02 + seed * 0.002,
+                }
+                for lambda_mmr in DEFAULT_LAMBDAS
+                for seed in sorted(SENSITIVITY_SEEDS)
+                for dataset_index, dataset in enumerate(TARGET_DATASETS)
+            ]
         )
+
+    def make_summary_reference(self):
+        return summarize_sensitivity_results(self.make_per_seed_reference())
 
     def test_all_eight_dataset_results_pass(self):
         validated = validate_dataset_results(self.make_dataset_results(), 0.5, 27)
@@ -163,43 +177,93 @@ class LambdaSensitivityValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "non-finite f1"):
             validate_dataset_results(result, 0.5, 27)
 
-    def test_all_eleven_lambda_settings_pass(self):
-        validated = validate_sensitivity_table(self.make_reference(), "Test reference")
+    def test_all_five_seeds_and_eleven_lambdas_pass(self):
+        validated = validate_sensitivity_per_seed_table(
+            self.make_per_seed_reference(), "Test per-seed reference"
+        )
+        self.assertEqual(len(validated), 440)
         self.assertEqual(set(validated["lambda_mmr"]), set(DEFAULT_LAMBDAS))
+        self.assertEqual(set(validated["seed"]), SENSITIVITY_SEEDS)
+        self.assertEqual(set(validated["dataset"]), set(TARGET_DATASETS))
 
-    def test_incomplete_lambda_reference_fails(self):
-        reference = self.make_reference().iloc[:-1]
+    def test_incomplete_lambda_seed_reference_fails(self):
+        reference = self.make_per_seed_reference().iloc[:-1]
+        with self.assertRaisesRegex(ValueError, "exactly 440 lambda/seed/dataset rows"):
+            validate_sensitivity_per_seed_table(reference, "Test per-seed reference")
+
+    def test_duplicate_lambda_seed_dataset_fails(self):
+        reference = self.make_per_seed_reference()
+        reference.loc[439, ["lambda_mmr", "seed", "dataset"]] = reference.loc[
+            0, ["lambda_mmr", "seed", "dataset"]
+        ]
+        with self.assertRaisesRegex(ValueError, "duplicate lambda/seed/dataset"):
+            validate_sensitivity_per_seed_table(reference, "Test per-seed reference")
+
+    def test_unexpected_seed_fails(self):
+        reference = self.make_per_seed_reference()
+        reference.loc[0, "seed"] = 5
+        with self.assertRaisesRegex(ValueError, "must cover seeds"):
+            validate_sensitivity_per_seed_table(reference, "Test per-seed reference")
+
+    def test_non_finite_per_seed_metric_fails(self):
+        reference = self.make_per_seed_reference()
+        reference.loc[0, "auc"] = float("nan")
+        with self.assertRaisesRegex(ValueError, "non-finite auc"):
+            validate_sensitivity_per_seed_table(reference, "Test per-seed reference")
+
+    def test_aggregate_requires_all_lambda_settings_and_five_runs(self):
+        reference = self.make_summary_reference().iloc[:-1]
         with self.assertRaisesRegex(ValueError, "exactly 11 lambda settings"):
-            validate_sensitivity_table(reference, "Test reference")
+            validate_sensitivity_summary(reference, "Test summary")
 
-    def test_duplicate_lambda_reference_fails(self):
-        reference = self.make_reference()
+    def test_aggregate_rejects_non_finite_and_duplicate_values(self):
+        reference = self.make_summary_reference()
+        reference.loc[0, "f1_std"] = float("nan")
+        with self.assertRaisesRegex(ValueError, "non-finite f1_std"):
+            validate_sensitivity_summary(reference, "Test summary")
+
+        reference = self.make_summary_reference()
         reference.loc[10, "lambda_mmr"] = 0.0
         with self.assertRaisesRegex(ValueError, "duplicate lambda_mmr"):
-            validate_sensitivity_table(reference, "Test reference")
+            validate_sensitivity_summary(reference, "Test summary")
 
-    def test_non_finite_reference_metric_fails(self):
-        reference = self.make_reference()
-        reference.loc[0, "auc_mean"] = float("nan")
-        with self.assertRaisesRegex(ValueError, "non-finite auc_mean"):
-            validate_sensitivity_table(reference, "Test reference")
+    def test_aggregate_std_is_population_std_across_platform_means(self):
+        summary = self.make_summary_reference()
+        row = summary.loc[summary["lambda_mmr"].eq(0.0)].iloc[0]
+        platform_f1_means = [0.6 + index * 0.01 + 0.002 for index in range(len(TARGET_DATASETS))]
+        expected_std = pd.Series(platform_f1_means).std(ddof=0)
+        self.assertAlmostEqual(row["f1_std"], expected_std)
+        self.assertEqual(row["datasets"], len(TARGET_DATASETS))
+        self.assertEqual(row["seeds"], len(SENSITIVITY_SEEDS))
 
     def test_missing_reference_file_fails(self):
         with tempfile.TemporaryDirectory() as temporary_dir:
             missing_path = Path(temporary_dir) / "missing.csv"
-            with self.assertRaisesRegex(FileNotFoundError, "reference is missing"):
+            with self.assertRaisesRegex(FileNotFoundError, "summary is missing"):
                 load_expected_reference(missing_path)
+            with self.assertRaisesRegex(FileNotFoundError, "per-seed.*reference is missing"):
+                load_expected_per_seed_reference(missing_path)
 
     def test_sensitivity_summary_matches_reference(self):
-        reference = self.make_reference()
-        compare_sensitivity_results(reference, reference.copy(), 0.02)
+        per_seed = self.make_per_seed_reference()
+        summary = self.make_summary_reference()
+        compare_sensitivity_results(per_seed, per_seed.copy(), summary, 0.02)
 
-    def test_sensitivity_summary_mismatch_fails(self):
-        actual = self.make_reference()
-        expected = self.make_reference()
-        expected.loc[0, "f1_mean"] = 0.7
-        with self.assertRaisesRegex(RuntimeError, "f1_mean differs"):
-            compare_sensitivity_results(actual, expected, 0.02)
+    def test_per_seed_mismatch_fails(self):
+        actual = self.make_per_seed_reference()
+        expected = actual.copy()
+        expected.loc[0, "f1"] = 0.7
+        with self.assertRaisesRegex(RuntimeError, "Per-seed f1 differs"):
+            compare_sensitivity_results(actual, expected, self.make_summary_reference(), 0.02)
+
+    def test_aggregate_mismatch_fails(self):
+        per_seed = self.make_per_seed_reference()
+        expected_summary = self.make_summary_reference()
+        expected_summary.loc[0, "f1_mean"] = 0.7
+        with self.assertRaisesRegex(RuntimeError, "Aggregate f1_mean differs"):
+            compare_sensitivity_results(
+                per_seed, per_seed.copy(), expected_summary, 0.02
+            )
 
 
 if __name__ == "__main__":
